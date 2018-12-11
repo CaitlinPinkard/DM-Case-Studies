@@ -1,0 +1,83 @@
+---
+title: "Science, Political Views, and Demographics, Oh My!"
+author: "Caitlin Pinkard"
+output: github_document
+---
+
+Market basket analysis is generally applied to just that - baskets, and specificially grocery baskets. However, I've always been interested in other applications to association rule mining. In this study, I've condensed survey results from the 2017 Pew Research Center Science and News Survey in an effort to find meaningful associations between both respondents' habits and interests. The survey includes measures of political affiliation, interest in various scientific issues, as well as pertinent demographic data, such as household size, income, and the ethnicity of the survey taker.
+
+By looking at this data and the association rules it produces, I hope to gather insights into various aspects of personality that may correlate to interests, actions, and even affiliations.
+
+Potential research questions include: does political party allegiance have any correlation to a person's interest in certain scientific issues and does someone's role in the household impact how they get their news?
+
+Source: 2017 Pew Research Center Science and News Survey (http://www.pewinternet.org/dataset/2017-pew-research-center-science-and-news-survey/)
+
+
+```{r data prep}
+setwd("~/Desktop/Data Mining/Blog3")
+
+data <- read.csv("survey.csv")
+
+#changing everything to factors
+set.seed(1234)
+data <- data[sample(1:nrow(data),300),c(3:33,37:65)]
+for(i in 1:ncol(data)){
+  data[,i] <- as.factor(data[,i])
+}
+
+library(arules)
+responses <- as(data, "transactions")
+```
+
+Initially, I tried generating association rules for all of the over 4,000 responses contained in this dataset. However, the sheer size of the data paired with the seemingly endless possibilities for rule combinations caused R to crazy. So, I instead selected a random sample of 300 responses and proceeded with the analysis.
+
+As a final data preparation step, I transformed all of the survey answers to factor variables, so that R and the arules package knew how to handle them. Finally, I transformed the dataset into the transactions type so that each response will be treated like a grocery basket. Again, this is necessary so that the arules functions will know how to manipulate the data.
+
+NOTE: I originally included variables to indicate whether or not respondents followed ABC News, CBS News, and NBC News. However, I've now removed these because they dominated the association rules shown below and flushed out any other potentially interesting insights.
+
+```{r response frequency}
+sort(itemFrequency(responses), decreasing = TRUE)[1:20]
+```
+
+###Response Frequency###
+
+Item (or, in our case, response) frequency shows us the most frequently indicated answers to the survey across all respondents. 
+About 98% of survey respondents answered that they do NOT get their news from either Independent Journal Review (IJR), Business Insider, or Vox. 
+Almost 95% of respondents do not have a child under a year old and about 79% do not even have children under the age of 17.
+Around 76% of respondents indicat owning a smartphone.
+
+More to the crux of this investigation, 90% of survey takers claim that they do NOT "regularly get science news from sources that provide alternative perspectives to conventional science or medical research." It will be interesting to see if this habit relates at all to political affilation when we inspect the rules created below.
+
+
+```{r apriori}
+response_rules <- apriori(responses, parameter = list(sup = 0.4, conf = 0.6, target="rules", minlen=2, maxlen=3))
+response_rules_sorted <- sort(response_rules, by="lift")[1:50]
+inspect(sort(response_rules, by="lift", decreasing = TRUE)[1:10])
+```
+
+**I've only output the top 10 rules to avoid cluttering this write-up.
+
+###General Findings###
+Unfortunately, there are many rules that don't provide much useful information. For example, a vast majority of the right hand sides simply tell us that someone is NOT interested in something. The rule reads as follows: if a respondent is not interested in X and Y, then they probably aren't interested in Z either. You can see why this isn't super helpful.
+
+
+###Interesting Findings###
+Many rules also follow the form of: if someone has an interest in X and Y, they are probably also interested in Z. The most common example of this is the second rule listed in the output above: {HealthMedInterest=1,NutritionInterest=1} => {EnvironmentInterest=1}. Interpretting the lift, if we know that someone is interested and topics of health/medical and nutrition, they are 1.32 times (32%) more likely to be interested in the environment than those who are not interested in nutrition, or health/medical issues. Perhaps, adults interested in one science-related issue are more inclined to be interested in scientific current events as a whole, making this association possible.
+
+Another interesting finding, yet admittedly unrelated to the main purpose of this study, is that people who filled out the survey in English and have a steady, paying job are 20% more likely to also own a smartphone than those who took the survey in spanish or may not be currently employed.
+
+
+```{r visualizations}
+library(arulesViz)
+plot(response_rules)
+
+plot(response_rules, method = "grouped")
+```
+
+The first visualization above shows how confidence, support, and lift relate to each other in this rule set. I chose to sort rules by lift because confidence and support only tell us about the prevalence of the indicated responses and not how one response influences (or correlates) to another. This relationship was really the purpose of this study.
+
+The second visualization shows an abbreviated synopsis of the rules generated. Clearly, there are too many response options that clutter up the graphic. This leads into my suggestions for future work.
+
+
+###Future Work###
+I hypothesize that a reason few interesting findings resulted from this study could be the sheer size of the data and the number of possible responses for each question. For example, the question regarding household income had 23 response options. Occupation and other work-related metrics also had many options from which respondents could choose. Perhaps combining some of these choices into larger bins (thus, decreasing the number of options) would other variables to appear in the association rules and new insights to bubble to the surface. This is definitely an avenue to expand on this analysis in the future.
